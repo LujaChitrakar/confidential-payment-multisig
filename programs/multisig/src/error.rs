@@ -20,4 +20,42 @@ pub enum ErrorCode {
     InvalidThreshold,
     #[msg("Owners must be unique")]
     UniqueOwners,
+
+    //payment errors
+    #[msg("Invalid bank ID")]
+    InvalidBankId,
+    #[msg("Invalid bank name")]
+    InvalidBankName,
+    #[msg("Invalid SWIFT code")]
+    InvalidSwiftCode,
+    #[msg("Invalid compliance tier")]
+    InvalidComplianceTier,
+    #[msg("Invalid entity ID")]
+    InvalidEntityId,
+    #[msg("Invalid compliance score")]
+    InvalidComplianceScore,
+    #[msg("Invalid country code")]
+    InvalidCountryCode,
+    #[msg("Invalid transfer ID")]
+    InvalidTransferId,
+    #[msg("Invalid amount")]
+    InvalidAmount,
+    #[msg("Invalid currency")]
+    InvalidCurrency,
+    #[msg("Transfer not approved")]
+    TransferNotApproved,
+    #[msg("Multisig approval required for this transfer")]
+    MultisigApprovalRequired,
+    #[msg("Approval not required for this transfer")]
+    ApprovalNotRequired,
+    #[msg("Invalid transfer status")]
+    InvalidTransferStatus,
+    #[msg("Sender not verified")]
+    SenderNotVerified,
+    #[msg("Recipient not verified")]
+    RecipientNotVerified,
+    #[msg("Insufficient compliance score")]
+    InsufficientComplianceScore,
+    #[msg("Sanctioned entity")]
+    SanctionedEntity,
 }
