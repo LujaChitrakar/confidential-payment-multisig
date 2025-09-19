@@ -68,79 +68,59 @@ impl From<&AccountMeta> for TransactionAccount {
 #[account]
 #[derive(InitSpace)]
 pub struct PaymentGateway {
-    pub admin_multisig: Pubkey,
-    pub compliance_multisig: Pubkey,
+    pub admin: Pubkey,
+    pub treasury: Pubkey, //where fees go
+    pub fee_bps: u16,
     pub is_active: bool,
     pub total_banks: u32,
-    pub large_transfer_threshold: u64,
-    pub max_daily_volume: u64,
+    // pub token_mint:Pubkey,
 }
 
 #[account]
 #[derive(InitSpace)]
 pub struct BankAccount {
-    #[max_len(30)]
-    pub bank_id: String,
-    #[max_len(20)]
-    pub bank_name: String,
+    pub bank_id: u64,
+    pub bank_admin: Pubkey,
+    // pub bank_multisig: Pubkey,
+    pub instant_withdrawl_limit: u64,
     #[max_len(10)]
     pub swift_code: String,
-    pub compliance_tier: u8,
     pub is_active: bool,
-    pub kyc_authority: Pubkey,
-    pub treasury_vault: Pubkey,
-    pub total_transfers: u64,
-    pub total_volume: u64,
-    pub bump: u8,
+    pub treasury_ata: Pubkey,
+    pub balance: u64,
 }
 
 #[account]
 #[derive(InitSpace)]
 pub struct KycRecord {
-    #[max_len(10)]
-    pub entity_id: String,
-    // pub entity_type: EntityType,
-    pub compliance_score: u8,
-    #[max_len(10)]
-    pub country_code: String,
+    pub owner: Pubkey,
     pub is_active: bool,
     pub verified_by: Pubkey,
-    pub verification_timestamp: i64,
-    #[max_len(20)]
-    pub freeze_reason: Option<String>,
-    pub frozen_at: Option<i64>,
+    pub updated_at: i64,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct UserStats {
+    pub owner: Pubkey,
+    pub mint: Pubkey,
+    pub balance: u64,
+    pub bump: u8,
 }
 
 #[account]
 #[derive(InitSpace)]
 pub struct TransferRequest {
-    #[max_len(20)]
-    pub transfer_id: String,
-    pub sender_bank: Pubkey,
+    pub payer: Pubkey,
     pub recipient_bank: Pubkey,
-    pub sender_entity: Pubkey,
-    pub recipient_entity: Pubkey,
     pub amount: u64,
-    #[max_len(20)]
-    pub currency: String,
-    #[max_len(20)]
-    pub reference: String,
-    #[max_len(20)]
-    pub compliance_metadata: String,
+    pub token_mint: Pubkey,
     pub status: TransferStatus,
     pub created_at: i64,
-    pub executed_at: Option<i64>,
+    // pub executed_at: Option<i64>,
     pub required_multisig_approval: bool,
     pub multisig_approved: bool,
-}
-
-// Enums and Events
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
-pub enum EntityType {
-    Individual,
-    Corporate,
-    Institution,
-    Government,
+    pub nonce: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, InitSpace)]

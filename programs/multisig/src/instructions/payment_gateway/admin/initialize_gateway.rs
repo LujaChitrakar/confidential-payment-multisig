@@ -4,28 +4,31 @@ use crate::state::PaymentGateway;
 
 #[derive(Accounts)]
 pub struct InitializeGateway<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
     #[account(
         init,
         payer = authority,
-        space = 8 + PaymentGateway::INIT_SPACE
+        seeds=[b"gateway"],
+        space = 8 + PaymentGateway::INIT_SPACE,
+        bump
     )]
     pub gateway: Account<'info, PaymentGateway>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn initialize_gateway_handler(
     ctx: Context<InitializeGateway>,
-    admin_multisig: Pubkey,
-    compliance_multisig: Pubkey,
+    admin: Pubkey,
+    treasury: Pubkey,
+    fee_bps: u16,
 ) -> Result<()> {
     let gateway = &mut ctx.accounts.gateway;
-    gateway.admin_multisig = admin_multisig;
-    gateway.compliance_multisig = compliance_multisig;
-    gateway.is_active = true;
+    gateway.admin = admin;
     gateway.total_banks = 0;
-    gateway.large_transfer_threshold = 100_000; // Default $100k
-    gateway.max_daily_volume = 10_000_000; // Default $10M
+    gateway.treasury = treasury;
+    gateway.fee_bps = fee_bps;
+    gateway.is_active = true;
+
     Ok(())
 }
