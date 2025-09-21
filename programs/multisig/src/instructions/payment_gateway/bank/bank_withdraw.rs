@@ -4,7 +4,7 @@ use anchor_spl::{
     token::{transfer, Mint, Token, TokenAccount, Transfer},
 };
 
-use crate::state::gateway::BankAccount;
+use crate::{error::ErrorCode, state::gateway::BankAccount};
 
 #[derive(Accounts)]
 #[instruction(bank_id:u64,recipient:Pubkey)]
@@ -43,10 +43,11 @@ pub struct BankWithdraw<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn withdraw_handler(ctx: Context<BankWithdraw>, amount: u64) -> Result<()> {
+pub fn withdraw_handler(ctx: Context<BankWithdraw>,bank_id:u64,_recipient:Pubkey, amount: u64) -> Result<()> {
     let bank = &mut ctx.accounts.bank;
     let bank_id_bytes = bank.bank_id.to_le_bytes();
 
+    require!(bank.bank_id == bank_id, ErrorCode::InvalidBankId);
     let signer_seeds: &[&[&[u8]]] = &[&[b"bank", &bank_id_bytes[..], &[ctx.bumps.bank]]];
 
     let cpi_ctx = CpiContext::new_with_signer(

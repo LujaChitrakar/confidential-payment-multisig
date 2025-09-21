@@ -25,6 +25,8 @@ declare_id!("3j1ncRqK33zZfcD41825zgEErb6xQJJhrfSH2v5L11wj");
 
 #[program]
 pub mod multisig {
+    use crate::instructions::payment_gateway::bank;
+
     use super::*;
 
     // MULTISIGpub
@@ -128,12 +130,12 @@ pub mod multisig {
     }
 
     pub fn bank_deposit(ctx: Context<BankDeposit>, bank_id: u64, amount: u64) -> Result<()> {
-        deposit_handler(ctx, amount)?;
+        bank_deposit_handler(ctx, bank_id,amount)?;
         Ok(())
     }
 
-    pub fn bank_withdraw(ctx: Context<BankWithdraw>, bank_id: u64, amount: u64) -> Result<()> {
-        withdraw_handler(ctx, amount)?;
+    pub fn bank_withdraw(ctx: Context<BankWithdraw>, bank_id: u64, recipient:Pubkey, amount: u64) -> Result<()> {
+        withdraw_handler(ctx,bank_id,recipient, amount)?;
         Ok(())
     }
 

@@ -3,7 +3,6 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount},
 };
-
 use crate::state::gateway::{BankAccount, PaymentGateway};
 
 #[derive(Accounts)]
@@ -31,10 +30,8 @@ pub struct RegisterBank<'info> {
     // #[account()]
     pub usdc_mint: Account<'info, Mint>,
 
-    // #[account(mut)]
-    // pub banks_multisig_signer: Account<'info, Multisig>,
     #[account(
-        init_if_needed,
+        init,
         payer = authority,
         associated_token::mint=usdc_mint,
         associated_token::authority=bank

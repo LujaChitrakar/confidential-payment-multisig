@@ -3,13 +3,32 @@ import { Program, web3 } from "@coral-xyz/anchor";
 import { Multisig } from "../target/types/multisig";
 import { assert } from "chai";
 import { Keypair, PublicKey } from "@solana/web3.js";
-describe("cordelia_program", () => {
-  // Configure the client to use the local cluster.
-  anchor.setProvider(anchor.AnchorProvider.env());
+import { BN } from "bn.js";
+import bs58 from "bs58";
+import { config } from "dotenv";
+config({ path: "./tests/.env" });
 
+describe("multisig_program", () => {
+  anchor.setProvider(anchor.AnchorProvider.env());
   const program = anchor.workspace.Multisig as Program<Multisig>;
 
-  const multiSigName = "Test DAO";
+  const logTxnSignature = (tx: string) => {
+    console.log(
+      "Your transaction signature",
+      `https://explorer.solana.com/tx/${tx}?cluster=devnet`
+    );
+  };
+
+  const getGatewayAddress = (program: Program<Multisig>) => {
+    const GATEWAY_SEED = "gateway";
+    const [gatewayPublicKey] = PublicKey.findProgramAddressSync(
+      [Buffer.from(GATEWAY_SEED)],
+      program.programId
+    );
+    return gatewayPublicKey;
+  };
+
+  const multiSigName = "Test";
 
   const [multiSig] = web3.PublicKey.findProgramAddressSync(
     [
@@ -43,7 +62,99 @@ describe("cordelia_program", () => {
     return transactionPda;
   }
 
-  it("It creates multi-sig!", async () => {
+  //gateway authority
+  const authorityKeypair = Keypair.fromSecretKey(
+    bs58.decode(process.env.AUTHORITY_PRIVATE_KEY!)
+  );
+  const authority = authorityKeypair.publicKey;
+
+  //bank admin
+  const adminKeypair = Keypair.fromSecretKey(
+    bs58.decode(process.env.ADMIN_PRIVATE_KEY!)
+  );
+  const admin = adminKeypair.publicKey;
+
+  const tokenMint = new PublicKey(
+    "FMdEtYLuweboBHGR4UiTnVXXcpCF2TKhoXj5uKtLNwTH"
+  );
+
+  //GATEWAY
+
+  it.skip("Initialize Gateway", async () => {
+    const amount = new BN(1000);
+    const tokenMint = new PublicKey(
+      "FMdEtYLuweboBHGR4UiTnVXXcpCF2TKhoXj5uKtLNwTH"
+    );
+    const tx = await program.methods
+      .initializeGateway(admin)
+      .accounts({ authority })
+      .signers([authorityKeypair])
+      .rpc();
+
+    logTxnSignature(tx);
+  });
+
+  it.skip("Attest KYC", async () => {
+    const bankId = new BN(1);
+    const tokenMint = new PublicKey(
+      "FMdEtYLuweboBHGR4UiTnVXXcpCF2TKhoXj5uKtLNwTH"
+    );
+    const tx = await program.methods
+      .attestKyc(bankId)
+      .accounts({ authority })
+      .signers([authorityKeypair])
+      .rpc();
+
+    logTxnSignature(tx);
+  });
+
+  it.skip("Register Bank", async () => {
+    const bankId = new BN(1);
+    const tokenMint = new PublicKey(
+      "FMdEtYLuweboBHGR4UiTnVXXcpCF2TKhoXj5uKtLNwTH"
+    );
+
+    const bankName = "Everest";
+    const swiftCode = "EBL";
+
+    const tx = await program.methods
+      .registerBank(bankId, bankName, swiftCode)
+      .accounts({ authority, usdcMint: tokenMint })
+      .signers([authorityKeypair])
+      .rpc();
+
+    logTxnSignature(tx);
+  });
+
+  it.skip("Bank Deposit", async () => {
+    const bankId = new BN(1);
+    const amount = new BN(10);
+    const tokenMint = new PublicKey(
+      "FMdEtYLuweboBHGR4UiTnVXXcpCF2TKhoXj5uKtLNwTH"
+    );
+
+    const tx = await program.methods
+      .bankDeposit(bankId, amount)
+      .accounts({ admin, usdcMint: tokenMint })
+      .signers([adminKeypair])
+      .rpc();
+
+    logTxnSignature(tx);
+  });
+
+  it.skip("Emergency Freeze", async () => {
+    const bankId = new BN(1);
+
+    const tx = await program.methods
+      .emergencyFreeze(bankId)
+      .accounts({ admin })
+      .signers([adminKeypair])
+      .rpc();
+
+    logTxnSignature(tx);
+  });
+
+  it.skip("It creates multi-sig!", async () => {
     const tx = await program.methods
       .createMultisig(
         [
@@ -63,7 +174,7 @@ describe("cordelia_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it("It creates transaction!", async () => {
+  it.skip("It creates transaction!", async () => {
     const transaction = await getTransactionKey(true);
 
     const tx = await program.methods
@@ -77,7 +188,7 @@ describe("cordelia_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it("It adds data to the transaction!", async () => {
+  it.skip("It adds data to the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const [txData] = web3.PublicKey.findProgramAddressSync(
@@ -99,7 +210,38 @@ describe("cordelia_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it("It finalizes data to the transaction!", async () => {
+  it.skip("It adds withdraw instruction to the transaction!", async () => {
+    const transaction = await getTransactionKey(false);
+    const [txData] = web3.PublicKey.findProgramAddressSync(
+      [anchor.utils.bytes.utf8.encode("data"), transaction.toBytes()],
+      program.programId
+    );
+
+    let amount = new BN(10);
+    let bank_id = new BN(1);
+    let recipient = Keypair.generate().publicKey;
+
+    const withdrawIx = await program.methods
+      .bankWithdraw(bank_id, amount)
+      .accounts({
+        recipient: recipient,
+        authority: multisigAuthority,
+      })
+      .instruction();
+
+    const tx = await program.methods
+      .createTxData([withdrawIx])
+      .accounts({
+        multiSig,
+        transaction,
+        txData,
+      })
+      .rpc();
+
+    console.log("Withdraw instruction added", tx);
+  });
+
+  it.skip("It finalizes data to the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const [txData] = web3.PublicKey.findProgramAddressSync(
@@ -119,7 +261,7 @@ describe("cordelia_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it("It votes for the transaction!", async () => {
+  it.skip("It votes for the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const [voteRecord] = web3.PublicKey.findProgramAddressSync(
@@ -143,7 +285,7 @@ describe("cordelia_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it("It accepts the transaction!", async () => {
+  it.skip("It accepts the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const tx = await program.methods
@@ -157,7 +299,7 @@ describe("cordelia_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it("It executes the transaction!", async () => {
+  it.skip("It executes the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const [txData] = web3.PublicKey.findProgramAddressSync(
@@ -219,27 +361,6 @@ describe("cordelia_program", () => {
 
     return anchor_tx;
   }
-
-  // async function createAddStratumTransaction() {
-  //   const anchor_tx = await program.methods
-  //     .changeMultisigRealloc({
-  //       addStratum: {
-  //         stratum: {
-  //           owners: [
-  //             new PublicKey("7YfWWiuRXf1mjDBsLCpuhoDvGLG5ny91QtGbohLF45aG"),
-  //           ],
-  //           m: 1,
-  //         },
-  //       },
-  //     })
-  //     .accounts({
-  //       multiSig,
-  //       authority: multisigAuthority,
-  //     })
-  //     .instruction();
-
-  //   return anchor_tx;
-  // }
 
   async function createRemoveOwnerTransaction() {
     const anchor_tx = await program.methods

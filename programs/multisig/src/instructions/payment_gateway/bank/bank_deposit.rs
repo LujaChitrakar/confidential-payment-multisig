@@ -1,33 +1,32 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{spl_token::state::Multisig, transfer, Mint, Token, TokenAccount, Transfer},
+    token::{ transfer, Mint, Token, TokenAccount, Transfer},
 };
-
-use crate::state::gateway::BankAccount;
+use crate::{error::ErrorCode, state::gateway::BankAccount};
 
 #[derive(Accounts)]
-#[instruction(bank_id:u64,recipient:Pubkey)]
+#[instruction(bank_id:u64)]
 pub struct BankDeposit<'info> {
     #[account(mut)]
-    pub deposit_authority: Signer<'info>,
+    pub admin: Signer<'info>,
 
-    // #[account()]
-    pub usdc_mint: Account<'info, Mint>,
-
+    
     #[account(
         mut,
-        seeds = [b"bank", &bank_id.to_le_bytes().as_ref()],
+        seeds = [b"bank", bank_id.to_le_bytes().as_ref()],
         bump
     )]
     pub bank: Account<'info, BankAccount>,
-
+    
+    // #[account()]
+    pub usdc_mint: Account<'info, Mint>,
     #[account(
         mut,
         associated_token::mint=usdc_mint,
-        associated_token::authority=deposit_authority
+        associated_token::authority=admin
     )]
-    pub deposit_authority_ata: Account<'info, TokenAccount>,
+    pub admin_ata: Account<'info, TokenAccount>,
 
     #[account(
         mut,
@@ -41,18 +40,20 @@ pub struct BankDeposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn deposit_handler(ctx: Context<BankDeposit>, amount: u64) -> Result<()> {
+pub fn bank_deposit_handler(ctx: Context<BankDeposit>, bank_id:u64,amount: u64) -> Result<()> {
     let bank = &mut ctx.accounts.bank;
+
+    require!(bank.bank_id == bank_id, ErrorCode::InvalidBankId);
     let cpi_ctx = CpiContext::new(
         ctx.accounts.token_program.to_account_info(),
         Transfer {
-            from: ctx.accounts.deposit_authority_ata.to_account_info(),
+            from: ctx.accounts.admin_ata.to_account_info(),
             to: ctx.accounts.treasury_ata.to_account_info(),
-            authority: ctx.accounts.deposit_authority.to_account_info(),
+            authority: ctx.accounts.admin.to_account_info(),
         },
     );
     transfer(cpi_ctx, amount)?;
 
-    bank.balance -= amount;
+    bank.balance += amount;
     Ok(())
 }

@@ -1,8 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{transfer, TokenAccount, Transfer},
-};
 
 use crate::{error::ErrorCode, state::gateway::BankAccount};
 
