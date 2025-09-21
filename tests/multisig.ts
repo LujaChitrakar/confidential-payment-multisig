@@ -2,11 +2,18 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { Multisig } from "../target/types/multisig";
 import { assert } from "chai";
-import { Keypair, PublicKey } from "@solana/web3.js";
+import { clusterApiUrl, Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { BN } from "bn.js";
 import bs58 from "bs58";
 import { config } from "dotenv";
 config({ path: "./tests/.env" });
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import {
+  createSmartTxn,
+  getAddressLookupTableAccounts,
+  getQuote,
+  getSwapIx,
+} from "./helper";
 
 describe("multisig_program", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
@@ -26,6 +33,16 @@ describe("multisig_program", () => {
       program.programId
     );
     return gatewayPublicKey;
+  };
+  const getBankAddress = (bankId) => {
+    const BANK_SEED = "bank";
+    const bankIdBuffer = Buffer.alloc(8);
+    bankIdBuffer.writeBigUInt64LE(bankId);
+    const [bank] = PublicKey.findProgramAddressSync(
+      [Buffer.from(BANK_SEED), bankIdBuffer],
+      program.programId
+    );
+    return bank;
   };
 
   const multiSigName = "Test";
@@ -73,6 +90,12 @@ describe("multisig_program", () => {
     bs58.decode(process.env.ADMIN_PRIVATE_KEY!)
   );
   const admin = adminKeypair.publicKey;
+
+  //Recipient
+  const recipientKeypair = Keypair.fromSecretKey(
+    bs58.decode(process.env.RECIPIENT_PRIVATE_KEY!)
+  );
+  const recipient = recipientKeypair.publicKey;
 
   const tokenMint = new PublicKey(
     "FMdEtYLuweboBHGR4UiTnVXXcpCF2TKhoXj5uKtLNwTH"
@@ -174,7 +197,7 @@ describe("multisig_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it.skip("It creates transaction!", async () => {
+  it("It creates transaction!", async () => {
     const transaction = await getTransactionKey(true);
 
     const tx = await program.methods
@@ -188,7 +211,7 @@ describe("multisig_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it.skip("It adds data to the transaction!", async () => {
+  it("It adds data(withdraw instruction) to the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const [txData] = web3.PublicKey.findProgramAddressSync(
@@ -196,7 +219,15 @@ describe("multisig_program", () => {
       program.programId
     );
 
-    const instruction = await createAddOwnerTransaction();
+    let amount = new BN(10);
+    let bankId = new BN(1);
+    const instruction = await program.methods
+      .bankWithdraw(bankId, recipient, amount)
+      .accounts({
+        admin,
+        usdcMint: tokenMint,
+      })
+      .instruction();
 
     const tx = await program.methods
       .createTxData([instruction])
@@ -218,14 +249,13 @@ describe("multisig_program", () => {
     );
 
     let amount = new BN(10);
-    let bank_id = new BN(1);
-    let recipient = Keypair.generate().publicKey;
+    let bankId = new BN(1);
 
     const withdrawIx = await program.methods
-      .bankWithdraw(bank_id, amount)
+      .bankWithdraw(bankId, recipient, amount)
       .accounts({
-        recipient: recipient,
-        authority: multisigAuthority,
+        admin,
+        usdcMint: tokenMint,
       })
       .instruction();
 
@@ -241,7 +271,7 @@ describe("multisig_program", () => {
     console.log("Withdraw instruction added", tx);
   });
 
-  it.skip("It finalizes data to the transaction!", async () => {
+  it("It finalizes data to the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const [txData] = web3.PublicKey.findProgramAddressSync(
@@ -261,7 +291,7 @@ describe("multisig_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it.skip("It votes for the transaction!", async () => {
+  it("It votes for the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const [voteRecord] = web3.PublicKey.findProgramAddressSync(
@@ -285,7 +315,7 @@ describe("multisig_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it.skip("It accepts the transaction!", async () => {
+  it("It accepts the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const tx = await program.methods
@@ -299,7 +329,7 @@ describe("multisig_program", () => {
     console.log("Your transaction signature", tx);
   });
 
-  it.skip("It executes the transaction!", async () => {
+  it("It executes the transaction!", async () => {
     const transaction = await getTransactionKey(false);
 
     const [txData] = web3.PublicKey.findProgramAddressSync(
@@ -340,6 +370,73 @@ describe("multisig_program", () => {
       .rpc();
 
     console.log("Your transaction signature", tx);
+  });
+
+  it.skip("Swap To SOL", async () => {
+    const solMint = new PublicKey(
+      "5MJxiHNXY9GNVqXjbCEJYUZjotichGVFivQEL3apoSYV"
+    );
+    const USDC_MINT = new PublicKey(
+      "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    );
+
+    let amount = new BN(10);
+    let bankId = new BN(1);
+
+    const bank = getBankAddress(bankId);
+    const bankQuoteAta = getAssociatedTokenAddressSync(USDC_MINT, bank, true);
+    const quote = await getQuote(solMint, USDC_MINT, amount.toNumber());
+    const result = await getSwapIx(bank, bankQuoteAta, quote);
+
+    const { swapInstruction, addressLookupTableAddresses } = result as any;
+
+    const data = Buffer.from(swapInstruction.data, "base64");
+    const keys = swapInstruction.accounts.map((key: any) => {
+      const pubkey = new PublicKey(key.pubkey);
+
+      if (pubkey.equals(bank)) {
+        return {
+          pubkey,
+          isWritable: true,
+          isSigner: false,
+        };
+      } else {
+        return {
+          pubkey,
+          isWritable: key.isWritable,
+          isSigner: key.isSigner,
+        };
+      }
+    });
+
+    const ix = await program.methods
+      .swap(bankId, data)
+      .accounts({
+        solMint,
+      })
+      .remainingAccounts(keys)
+      .instruction();
+
+    const addressLookupTableAccounts = await getAddressLookupTableAccounts(
+      addressLookupTableAddresses,
+      new Connection(clusterApiUrl("mainnet-beta"))
+    );
+
+    const { transaction } = await createSmartTxn(
+      [ix],
+      program.provider.wallet.publicKey,
+      addressLookupTableAccounts,
+      program.provider.connection
+    );
+
+    const signedTxn = await program.provider.wallet.signTransaction(
+      transaction
+    );
+    const signature = await program.provider.connection.sendRawTransaction(
+      signedTxn.serialize()
+    );
+
+    logTxnSignature(signature);
   });
 
   //Transaction Builder::

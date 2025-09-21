@@ -11,7 +11,6 @@ pub struct BankDeposit<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
 
-    
     #[account(
         mut,
         seeds = [b"bank", bank_id.to_le_bytes().as_ref()],

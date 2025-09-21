@@ -43,7 +43,7 @@ pub struct BankWithdraw<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn withdraw_handler(ctx: Context<BankWithdraw>,bank_id:u64,_recipient:Pubkey, amount: u64) -> Result<()> {
+pub fn bank_withdraw_handler(ctx: Context<BankWithdraw>,bank_id:u64,_recipient:Pubkey, amount: u64) -> Result<()> {
     let bank = &mut ctx.accounts.bank;
     let bank_id_bytes = bank.bank_id.to_le_bytes();
 

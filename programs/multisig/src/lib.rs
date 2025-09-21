@@ -3,6 +3,7 @@ use std::convert::Into;
 pub mod error;
 pub mod instructions;
 pub mod state;
+pub mod constants;
 use instructions::{
     multisig::{
         accept_transaction::*, add_tx_data::*, change_multisig::*, change_multisig_realloc::*,
@@ -11,7 +12,7 @@ use instructions::{
     },
     payment_gateway::{
         admin::{attest_kyc::*, initialize_gateway::*, register_bank::*},
-        bank::{bank_deposit::*, bank_withdraw::*, emergency_freeze::*},
+        bank::{bank_deposit::*, bank_withdraw::*, emergency_freeze::*,swap::*},
     },
 };
 use state::{
@@ -22,11 +23,10 @@ use state::{
 use crate::error::ErrorCode;
 
 declare_id!("3j1ncRqK33zZfcD41825zgEErb6xQJJhrfSH2v5L11wj");
+declare_program!(jupiter);
 
 #[program]
 pub mod multisig {
-    use crate::instructions::payment_gateway::bank;
-
     use super::*;
 
     // MULTISIGpub
@@ -135,12 +135,17 @@ pub mod multisig {
     }
 
     pub fn bank_withdraw(ctx: Context<BankWithdraw>, bank_id: u64, recipient:Pubkey, amount: u64) -> Result<()> {
-        withdraw_handler(ctx,bank_id,recipient, amount)?;
+        bank_withdraw_handler(ctx,bank_id,recipient, amount)?;
         Ok(())
     }
 
     pub fn emergency_freeze(ctx: Context<EmergencyFreeze>, bank_id: u64) -> Result<()> {
         emergency_freeze_handler(ctx, bank_id)?;
+        Ok(())
+    }
+
+    pub fn swap(ctx: Context<Swap>, bank_id: u64,data: Vec<u8>) -> Result<()> {
+        swap_handler(ctx, bank_id,data)?;
         Ok(())
     }
 }

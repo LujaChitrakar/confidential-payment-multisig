@@ -110,4 +110,8 @@ pub enum ErrorCode {
     InvalidInstructionAccount,
     #[msg("InvalidInstruction")]
     InvalidInstruction,
+    #[msg("InsufficientQuoteTokens")]
+    InsufficientQuoteTokens,
+    #[msg("InvalidSwap")]
+    InvalidSwap,
 }
