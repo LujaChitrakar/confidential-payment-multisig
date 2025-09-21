@@ -1,67 +1,125 @@
 use crate::{
     error::ErrorCode,
-    state::{Multisig, Transaction},
+    state::{
+        multisig::MultiSig,
+        transaction::{Transaction, TransactionStatus},
+        tx_data::TxData,
+    },
+    ID,
 };
 use anchor_lang::{
     prelude::*,
-    solana_program::{self, instruction::Instruction},
+    solana_program::{instruction::Instruction, program::invoke_signed},
 };
-use std::ops::Deref;
 
 #[derive(Accounts)]
+#[instruction(owner_stratum: u8)]
 pub struct ExecuteTransaction<'info> {
-    #[account(constraint = multisig.owner_set_seqno == transaction.owner_set_seqno)]
-    multisig: Box<Account<'info, Multisig>>,
-    /// CHECK: multisig_signer is a PDA program signer. Data is never read or written to
     #[account(
-        seeds = [multisig.key().as_ref()],
-        bump = multisig.nonce,
+        mut,
+        seeds = [
+            b"transaction",
+            multi_sig.key().as_ref(),
+            &transaction.transaction_num.to_le_bytes()
+        ],
+        bump = transaction.bump,
+        constraint = transaction.multi_sig == multi_sig.key() @ ErrorCode::InvalidTransaction,
+        constraint = transaction.status == TransactionStatus::Accepted @ ErrorCode::NotAccepted,
+        address = tx_data.transaction @ ErrorCode::InvalidTxData
     )]
-    multisig_signer: UncheckedAccount<'info>,
-    #[account(mut, has_one = multisig)]
-    transaction: Box<Account<'info, Transaction>>,
+    pub transaction: Account<'info, Transaction>,
+
+    #[account(
+        seeds = [
+            b"data",
+            transaction.key().as_ref(),
+        ],
+        bump = tx_data.bump,
+    )]
+    pub tx_data: Account<'info, TxData>,
+
+    #[account(
+        seeds = [
+            b"multi_sig",
+            multi_sig.creator.as_ref(),
+            multi_sig.name.as_bytes()
+        ],
+        bump = multi_sig.multisig_bump,
+        constraint = multi_sig.strata.len() > owner_stratum as usize @ ErrorCode::InvalidStratumNumber
+    )]
+    pub multi_sig: Account<'info, MultiSig>,
+
+    #[account(
+        mut,
+        constraint = multi_sig.is_owner_stratum(signer.key(), owner_stratum as usize).is_some() @ ErrorCode::InvalidOwner
+    )]
+    pub signer: Signer<'info>,
 }
 
-// Executes the given transaction if threshold owners have signed it.
-pub fn execute_transaction_handler(ctx: Context<ExecuteTransaction>) -> Result<()> {
-    // Has this been executed already?
-    if ctx.accounts.transaction.did_execute {
-        return Err(ErrorCode::AlreadyExecuted.into());
-    }
+pub fn execute_transaction_handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, ExecuteTransaction<'info>>,
+    _owner_stratum: u8,
+) -> Result<()> {
+    let multi_sig = &ctx.accounts.multi_sig;
+    let tx_data = &ctx.accounts.tx_data;
+    let transaction = &mut ctx.accounts.transaction;
+    let multi_sig_key = multi_sig.key();
 
-    // Do we have enough signers.
-    let sig_count = ctx
-        .accounts
-        .transaction
-        .signers
-        .iter()
-        .filter(|&did_sign| *did_sign)
-        .count() as u64;
-    if sig_count < ctx.accounts.multisig.threshold {
-        return Err(ErrorCode::NotEnoughSigners.into());
-    }
+    let authority_seeds = [
+        b"authority",
+        multi_sig_key.as_ref(),
+        &[multi_sig.authority_bump],
+    ];
 
-    // Execute the transaction signed by the multisig.
-    let mut ix: Instruction = (*ctx.accounts.transaction).deref().into();
-    ix.accounts = ix
-        .accounts
-        .iter()
-        .map(|acc| {
-            let mut acc = acc.clone();
-            if &acc.pubkey == ctx.accounts.multisig_signer.key {
-                acc.is_signer = true;
+    let remaining_accounts = &mut ctx.remaining_accounts.iter();
+
+    for ix_data in tx_data.instructions.iter() {
+        let ix_data = ix_data.clone();
+
+        let program_id = next_account_info(remaining_accounts)?;
+
+        require_keys_eq!(
+            program_id.key(),
+            ix_data.program_id,
+            ErrorCode::InvalidInstructionAccount
+        );
+
+        let ix_keys = ix_data.keys.clone();
+        let mut ix: Instruction = Instruction::from(ix_data);
+        let mut ix_accounts = vec![program_id.clone()];
+
+        for key in &ix_keys {
+            let ix_account = next_account_info(remaining_accounts)?;
+            require_keys_eq!(
+                key.pubkey,
+                ix_account.key(),
+                ErrorCode::InvalidInstructionAccount
+            );
+
+            ix_accounts.push(ix_account.clone());
+        }
+
+        if program_id.key() == ID {
+            // If the internal instruction is execute_transaction(), return error
+            if ix.data.get(0..8)
+                == Some(vec![0xe7, 0xad, 0x31, 0x5b, 0xeb, 0x18, 0x44, 0x13].as_slice())
+            {
+                return Err(ErrorCode::InvalidInstruction.into());
             }
-            acc
-        })
-        .collect();
-    let multisig_key = ctx.accounts.multisig.key();
-    let seeds = &[multisig_key.as_ref(), &[ctx.accounts.multisig.nonce]];
-    let signer = &[&seeds[..]];
-    let accounts = ctx.remaining_accounts;
-    solana_program::program::invoke_signed(&ix, accounts, signer)?;
 
-    // Burn the transaction to ensure one time use.
-    ctx.accounts.transaction.did_execute = true;
+            // if the internal instruction is change_multisig_realloc(), change the payer
+            if ix.data.get(0..8)
+                == Some(vec![0x98, 0x5a, 0x30, 0x68, 0x6b, 0x7a, 0x0b, 0x71].as_slice())
+            {
+                ix_accounts[3] = ctx.accounts.signer.to_account_info();
+                ix.accounts[2] = AccountMeta::new(ctx.accounts.signer.key(), true);
+            }
+        }
 
+        invoke_signed(&ix, &ix_accounts, &[&authority_seeds])?;
+    }
+
+    transaction.status = TransactionStatus::Executed;
+    ctx.accounts.multi_sig.reload()?;
     Ok(())
 }

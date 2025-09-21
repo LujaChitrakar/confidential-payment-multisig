@@ -20,10 +20,10 @@ pub enum ErrorCode {
     InvalidThreshold,
     #[msg("Owners must be unique")]
     UniqueOwners,
+    #[msg("Invalid Bank Id")]
+    InvalidBankId,
 
     //payment errors
-    #[msg("Invalid bank ID")]
-    InvalidBankId,
     #[msg("Invalid bank name")]
     InvalidBankName,
     #[msg("Invalid SWIFT code")]
@@ -58,4 +58,56 @@ pub enum ErrorCode {
     InsufficientComplianceScore,
     #[msg("Sanctioned entity")]
     SanctionedEntity,
+
+    //from here
+    #[msg("Owner Already Exists")]
+    OwnerAlreadyExists,
+    #[msg("InactiveStratum")]
+    InactiveStratum,
+    #[msg("InvalidOwnersCount")]
+    InvalidOwnersCount,
+    #[msg("ThresholdExceeds")]
+    ThresholdExceeds,
+    #[msg("OwnerDoesntExist")]
+    OwnerDoesntExist,
+    #[msg("InvalidStrataLen")]
+    InvalidStrataLen,
+    #[msg("CannotDeactivateFirst")]
+    CannotDeactivateFirst,
+    #[msg("ThresholdNotZero")]
+    ThresholdNotZero,
+    #[msg("ActiveStratum")]
+    ActiveStratum,
+    #[msg("ThresholdZero")]
+    ThresholdZero,
+    #[msg("InvalidTransaction")]
+    InvalidTransaction,
+    #[msg("NotVoteStatus")]
+    NotVoteStatus,
+    #[msg("VersionOutdated")]
+    VersionOutdated,
+    #[msg("InvalidStratumNumber")]
+    InvalidStratumNumber,
+    #[msg("InsufficientVotes")]
+    InsufficientVotes,
+    #[msg("AlreadyFinalized")]
+    AlreadyFinalized,
+    #[msg("InvalidTxData")]
+    InvalidTxData,
+    #[msg("InvalidCreator")]
+    InvalidCreator,
+    #[msg("InvalidTxDataIndex")]
+    InvalidTxDataIndex,
+    #[msg("InvalidNameLen")]
+    InvalidNameLen,
+    #[msg("DuplicateOwner")]
+    DuplicateOwner,
+    #[msg("InvalidDescriptionLen")]
+    InvalidDescriptionLen,
+    #[msg("NotAccepted")]
+    NotAccepted,
+    #[msg("InvalidInstructionAccount")]
+    InvalidInstructionAccount,
+    #[msg("InvalidInstruction")]
+    InvalidInstruction,
 }

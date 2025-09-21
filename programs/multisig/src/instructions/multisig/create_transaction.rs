@@ -1,45 +1,73 @@
-use crate::{
-    error::ErrorCode,
-    state::{Multisig, Transaction, TransactionAccount},
-};
 use anchor_lang::prelude::*;
 
-// Creates a new transaction account, automatically signed by the creator, which must be one of the owners of the multisig.
+use crate::{
+    error::ErrorCode,
+    state::{multisig::MultiSig, transaction::Transaction},
+};
+
 #[derive(Accounts)]
+#[instruction(owner_stratum: u8, description: String)]
 pub struct CreateTransaction<'info> {
-    multisig: Box<Account<'info, Multisig>>,
-    #[account(zero, signer)]
-    transaction: Box<Account<'info, Transaction>>,
-    // One of the owners. Checked in the handler.
-    proposer: Signer<'info>,
+    #[account(
+        init,
+        payer = signer,
+        space = Transaction::len(multi_sig.strata.len(), description),
+        seeds = [
+            b"transaction",
+            multi_sig.key().as_ref(),
+            &multi_sig.transaction_count.to_le_bytes()
+        ],
+        bump
+    )]
+    pub transaction: Account<'info, Transaction>,
+
+    #[account(
+        mut,
+        seeds = [
+            b"multi_sig",
+            multi_sig.creator.as_ref(),
+            multi_sig.name.as_bytes()
+        ],
+        bump = multi_sig.multisig_bump,
+        constraint = multi_sig.strata.len() > owner_stratum as usize @ ErrorCode::InvalidStratumNumber
+    )]
+    pub multi_sig: Account<'info, MultiSig>,
+
+    #[account(
+        mut,
+        constraint = multi_sig.is_owner_stratum(signer.key(), owner_stratum as usize).is_some() @ ErrorCode::InvalidOwner
+    )]
+    pub signer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
 }
 
 pub fn create_transaction_handler(
     ctx: Context<CreateTransaction>,
-    pid: Pubkey,
-    accs: Vec<TransactionAccount>,
-    data: Vec<u8>,
+    _owner_stratum: u8,
+    description: String,
 ) -> Result<()> {
-    let owner_index = ctx
-        .accounts
-        .multisig
-        .owners
-        .iter()
-        .position(|a| a == ctx.accounts.proposer.key)
-        .ok_or(ErrorCode::InvalidOwner)?;
+    let multi_sig = &mut ctx.accounts.multi_sig;
+    let transaction = &mut ctx.accounts.transaction;
+    let owner = &ctx.accounts.signer;
 
-    let mut signers = Vec::new();
-    signers.resize(ctx.accounts.multisig.owners.len(), false);
-    signers[owner_index] = true;
+    require_gte!(140, description.len(), ErrorCode::InvalidDescriptionLen);
 
-    let tx = &mut ctx.accounts.transaction;
-    tx.program_id = pid;
-    tx.accounts = accs;
-    tx.data = data;
-    tx.signers = signers;
-    tx.multisig = ctx.accounts.multisig.key();
-    tx.did_execute = false;
-    tx.owner_set_seqno = ctx.accounts.multisig.owner_set_seqno;
+    let transaction_num = multi_sig.transaction_count;
+    let version = multi_sig.version;
+    let stratum_count = multi_sig.strata.len();
+
+    multi_sig.transaction_count = multi_sig.transaction_count.checked_add(1).unwrap();
+
+    **transaction = Transaction::new(
+        multi_sig.key(),
+        owner.key(),
+        transaction_num,
+        ctx.bumps.transaction,
+        version,
+        stratum_count,
+        description,
+    );
 
     Ok(())
 }

@@ -1,173 +1,300 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import { Program, web3 } from "@coral-xyz/anchor";
 import { Multisig } from "../target/types/multisig";
 import { assert } from "chai";
-
-describe("multisig", () => {
+import { Keypair, PublicKey } from "@solana/web3.js";
+describe("cordelia_program", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.AnchorProvider.env());
 
-  const program = anchor.workspace.multisig as Program<Multisig>;
+  const program = anchor.workspace.Multisig as Program<Multisig>;
 
-  it("Tests the multisig program", async () => {
-    const multisig = anchor.web3.Keypair.generate();
-    const [multisigSigner, nonce] =
-      await anchor.web3.PublicKey.findProgramAddress(
-        [multisig.publicKey.toBuffer()],
-        program.programId
-      );
-    const multisigSize = 200; // Big enough.
+  const multiSigName = "Test DAO";
 
-    const ownerA = anchor.web3.Keypair.generate();
-    const ownerB = anchor.web3.Keypair.generate();
-    const ownerC = anchor.web3.Keypair.generate();
-    const ownerD = anchor.web3.Keypair.generate();
-    const owners = [ownerA.publicKey, ownerB.publicKey, ownerC.publicKey];
+  const [multiSig] = web3.PublicKey.findProgramAddressSync(
+    [
+      anchor.utils.bytes.utf8.encode("multi_sig"),
+      program.provider.publicKey.toBytes(),
+      anchor.utils.bytes.utf8.encode(multiSigName),
+    ],
+    program.programId
+  );
 
-    const threshold = new anchor.BN(2);
-    await program.rpc.createMultisig(owners, threshold, nonce, {
-      accounts: {
-        multisig: multisig.publicKey,
-      },
-      instructions: [
-        await program.account.multisig.createInstruction(
-          multisig,
-          multisigSize
-        ),
+  const [multisigAuthority] = web3.PublicKey.findProgramAddressSync(
+    [anchor.utils.bytes.utf8.encode("authority"), multiSig.toBytes()],
+    program.programId
+  );
+
+  async function getTransactionKey(create: boolean) {
+    const multisigData = await program.account.multiSig.fetch(multiSig);
+    const count = create
+      ? (multisigData.transactionCount as number)
+      : (multisigData.transactionCount as number) - 1;
+
+    const [transactionPda] = web3.PublicKey.findProgramAddressSync(
+      [
+        anchor.utils.bytes.utf8.encode("transaction"),
+        multiSig.toBytes(),
+        new anchor.BN(count).toBuffer("le", 4),
       ],
-      signers: [multisig],
-    });
-
-    let multisigAccount = await program.account.multisig.fetch(
-      multisig.publicKey
-    );
-    assert.strictEqual(multisigAccount.nonce, nonce);
-    assert.ok(multisigAccount.threshold.eq(new anchor.BN(2)));
-    assert.deepStrictEqual(multisigAccount.owners, owners);
-    assert.ok(multisigAccount.ownerSetSeqno === 0);
-
-    const pid = program.programId;
-    const accounts = [
-      {
-        pubkey: multisig.publicKey,
-        isWritable: true,
-        isSigner: false,
-      },
-      {
-        pubkey: multisigSigner,
-        isWritable: false,
-        isSigner: true,
-      },
-    ];
-    const newOwners = [ownerA.publicKey, ownerB.publicKey, ownerD.publicKey];
-    const data = program.coder.instruction.encode("set_owners", {
-      owners: newOwners,
-    });
-
-    const transaction = anchor.web3.Keypair.generate();
-    const txSize = 1000; // Big enough, cuz I'm lazy.
-    await program.rpc.createTransaction(pid, accounts, data, {
-      accounts: {
-        multisig: multisig.publicKey,
-        transaction: transaction.publicKey,
-        proposer: ownerA.publicKey,
-      },
-      instructions: [
-        await program.account.transaction.createInstruction(
-          transaction,
-          txSize
-        ),
-      ],
-      signers: [transaction, ownerA],
-    });
-
-    const txAccount = await program.account.transaction.fetch(
-      transaction.publicKey
+      program.programId
     );
 
-    assert.ok(txAccount.programId.equals(pid));
-    assert.deepStrictEqual(txAccount.accounts, accounts);
-    assert.deepStrictEqual(txAccount.data, data);
-    assert.ok(txAccount.multisig.equals(multisig.publicKey));
-    assert.deepStrictEqual(txAccount.didExecute, false);
-    assert.ok(txAccount.ownerSetSeqno === 0);
+    return transactionPda;
+  }
 
-    // Other owner approves transactoin.
-    await program.rpc.approve({
-      accounts: {
-        multisig: multisig.publicKey,
-        transaction: transaction.publicKey,
-        owner: ownerB.publicKey,
-      },
-      signers: [ownerB],
-    });
-
-    // Now that we've reached the threshold, send the transactoin.
-    await program.rpc.executeTransaction({
-      accounts: {
-        multisig: multisig.publicKey,
-        multisigSigner,
-        transaction: transaction.publicKey,
-      },
-      remainingAccounts: program.instruction.setOwners
-        .accounts({
-          multisig: multisig.publicKey,
-          multisigSigner,
-        })
-        // Change the signer status on the vendor signer since it's signed by the program, not the client.
-        .map((meta) =>
-          meta.pubkey.equals(multisigSigner)
-            ? { ...meta, isSigner: false }
-            : meta
-        )
-        .concat({
-          pubkey: program.programId,
-          isWritable: false,
-          isSigner: false,
-        }),
-    });
-
-    multisigAccount = await program.account.multisig.fetch(multisig.publicKey);
-
-    assert.strictEqual(multisigAccount.nonce, nonce);
-    assert.ok(multisigAccount.threshold.eq(new anchor.BN(2)));
-    assert.deepStrictEqual(multisigAccount.owners, newOwners);
-    assert.ok(multisigAccount.ownerSetSeqno === 1);
-  });
-
-  it("Assert Unique Owners", async () => {
-    const multisig = anchor.web3.Keypair.generate();
-    const [_multisigSigner, nonce] =
-      await anchor.web3.PublicKey.findProgramAddress(
-        [multisig.publicKey.toBuffer()],
-        program.programId
-      );
-    const multisigSize = 200; // Big enough.
-
-    const ownerA = anchor.web3.Keypair.generate();
-    const ownerB = anchor.web3.Keypair.generate();
-    const owners = [ownerA.publicKey, ownerB.publicKey, ownerA.publicKey];
-
-    const threshold = new anchor.BN(2);
-    try {
-      await program.rpc.createMultisig(owners, threshold, nonce, {
-        accounts: {
-          multisig: multisig.publicKey,
-          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        },
-        instructions: [
-          await program.account.multisig.createInstruction(
-            multisig,
-            multisigSize
-          ),
+  it("It creates multi-sig!", async () => {
+    const tx = await program.methods
+      .createMultisig(
+        [
+          {
+            owners: [program.provider.publicKey],
+            m: 1,
+            active: false,
+          },
         ],
-        signers: [multisig],
-      });
-      assert.fail();
-    } catch (err) {
-      const error = err.error;
-      assert.strictEqual(error.errorCode.number, 6008);
-      assert.strictEqual(error.errorMessage, "Owners must be unique");
-    }
+        multiSigName
+      )
+      .accounts({
+        multiSig,
+      })
+      .rpc();
+
+    console.log("Your transaction signature", tx);
   });
+
+  it("It creates transaction!", async () => {
+    const transaction = await getTransactionKey(true);
+
+    const tx = await program.methods
+      .createTransaction(0, "Add a new owner to the multi-sig")
+      .accounts({
+        multiSig,
+        transaction,
+      })
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+  });
+
+  it("It adds data to the transaction!", async () => {
+    const transaction = await getTransactionKey(false);
+
+    const [txData] = web3.PublicKey.findProgramAddressSync(
+      [anchor.utils.bytes.utf8.encode("data"), transaction.toBytes()],
+      program.programId
+    );
+
+    const instruction = await createAddOwnerTransaction();
+
+    const tx = await program.methods
+      .createTxData([instruction])
+      .accounts({
+        multiSig,
+        transaction,
+        txData,
+      })
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+  });
+
+  it("It finalizes data to the transaction!", async () => {
+    const transaction = await getTransactionKey(false);
+
+    const [txData] = web3.PublicKey.findProgramAddressSync(
+      [anchor.utils.bytes.utf8.encode("data"), transaction.toBytes()],
+      program.programId
+    );
+
+    const tx = await program.methods
+      .finalizeTxData()
+      .accounts({
+        multiSig,
+        transaction,
+        txData,
+      })
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+  });
+
+  it("It votes for the transaction!", async () => {
+    const transaction = await getTransactionKey(false);
+
+    const [voteRecord] = web3.PublicKey.findProgramAddressSync(
+      [
+        anchor.utils.bytes.utf8.encode("vote"),
+        transaction.toBytes(),
+        program.provider.publicKey.toBytes(),
+      ],
+      program.programId
+    );
+
+    const tx = await program.methods
+      .voteTransaction(0, true)
+      .accounts({
+        multiSig,
+        transaction,
+        voteRecord,
+      })
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+  });
+
+  it("It accepts the transaction!", async () => {
+    const transaction = await getTransactionKey(false);
+
+    const tx = await program.methods
+      .acceptTransaction(0)
+      .accounts({
+        multiSig,
+        transaction,
+      })
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+  });
+
+  it("It executes the transaction!", async () => {
+    const transaction = await getTransactionKey(false);
+
+    const [txData] = web3.PublicKey.findProgramAddressSync(
+      [anchor.utils.bytes.utf8.encode("data"), transaction.toBytes()],
+      program.programId
+    );
+
+    const instructionData = await program.account.txData.fetch(txData);
+
+    const remainingAccounts = [];
+
+    const instructions = instructionData.instructions as any[];
+
+    instructions.forEach((ix) => {
+      remainingAccounts.push({
+        pubkey: ix.programId,
+        isSigner: false,
+        isWritable: false,
+      });
+
+      ix.keys.forEach((key: any) => {
+        if (key.pubkey.toBase58() === multisigAuthority.toBase58()) {
+          key.isSigner = false;
+        }
+
+        remainingAccounts.push(key);
+      });
+    });
+
+    const tx = await program.methods
+      .executeTransaction(0)
+      .accounts({
+        multiSig,
+        transaction,
+        txData,
+      })
+      .remainingAccounts(remainingAccounts)
+      .rpc();
+
+    console.log("Your transaction signature", tx);
+  });
+
+  //Transaction Builder::
+  async function createAddOwnerTransaction() {
+    const anchor_tx = await program.methods
+      .changeMultisigRealloc({
+        addOwner: {
+          owner: new web3.PublicKey(
+            "7YfWWiuRXf1mjDBsLCpuhoDvGLG5ny91QtGbohLF45aG"
+          ),
+          stratum: 0,
+        },
+      })
+      .accounts({
+        multiSig,
+        authority: multisigAuthority,
+      })
+      .instruction();
+
+    return anchor_tx;
+  }
+
+  // async function createAddStratumTransaction() {
+  //   const anchor_tx = await program.methods
+  //     .changeMultisigRealloc({
+  //       addStratum: {
+  //         stratum: {
+  //           owners: [
+  //             new PublicKey("7YfWWiuRXf1mjDBsLCpuhoDvGLG5ny91QtGbohLF45aG"),
+  //           ],
+  //           m: 1,
+  //         },
+  //       },
+  //     })
+  //     .accounts({
+  //       multiSig,
+  //       authority: multisigAuthority,
+  //     })
+  //     .instruction();
+
+  //   return anchor_tx;
+  // }
+
+  async function createRemoveOwnerTransaction() {
+    const anchor_tx = await program.methods
+      .changeMultisig(
+        {
+          removeOwner: {
+            owner: new web3.PublicKey(
+              "7YfWWiuRXf1mjDBsLCpuhoDvGLG5ny91QtGbohLF45aG"
+            ),
+          },
+        },
+        0
+      )
+      .accounts({
+        multiSig,
+        authority: multisigAuthority,
+      })
+      .instruction();
+
+    return anchor_tx;
+  }
+
+  async function createDeactivateStratumTransaction() {
+    const anchor_tx = await program.methods
+      .changeMultisig({ deactivateStratum: {} }, 1)
+      .accounts({
+        multiSig,
+        authority: multisigAuthority,
+      })
+      .instruction();
+
+    return anchor_tx;
+  }
+
+  async function createActivateStratumTransaction() {
+    const anchor_tx = await program.methods
+      .changeMultisig({ activateStratum: {} }, 1)
+      .accounts({
+        multiSig,
+        authority: multisigAuthority,
+      })
+      .instruction();
+
+    return anchor_tx;
+  }
+
+  async function createChangeMTransaction() {
+    const anchor_tx = await program.methods
+      .changeMultisig({ changeM: { newM: 0 } }, 1)
+      .accounts({
+        multiSig,
+        authority: multisigAuthority,
+      })
+      .instruction();
+
+    return anchor_tx;
+  }
 });

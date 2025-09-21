@@ -1,18 +1,17 @@
+// use crate::state::{BankAccount, Multisig, UserStats};
 // use anchor_lang::prelude::*;
 // use anchor_spl::{
 //     associated_token::AssociatedToken,
 //     token::{transfer, Mint, Token, TokenAccount, Transfer},
 // };
 
-// use crate::state::{BankAccount, Multisig, UserStats};
-
 // #[derive(Accounts)]
 // #[instruction(bank_id:u64,recipient:Pubkey)]
-// pub struct BankWithdraw<'info> {
+// pub struct BankDeposit<'info> {
 //     #[account(mut)]
-//     pub admin: Signer<'info>,
+//     pub deposit_authority: Signer<'info>,
 
-//     #[account()]
+//     // #[account()]
 //     pub usdc_mint: Account<'info, Mint>,
 
 //     #[account(
@@ -26,11 +25,11 @@
 //     pub banks_multisig_signer: Account<'info, Multisig>,
 
 //     #[account(
-//          mut,
+//         mut,
 //         associated_token::mint=usdc_mint,
-//         associated_token::authority=recipient
+//         associated_token::authority=deposit_authority
 //     )]
-//     pub reciepient_ata: Account<'info, TokenAccount>,
+//     pub deposit_authority_ata: Account<'info, TokenAccount>,
 
 //     #[account(
 //         mut,
@@ -44,16 +43,14 @@
 //     pub system_program: Program<'info, System>,
 // }
 
-// pub fn withdraw_handler(ctx: Context<BankWithdraw>, amount: u64) -> Result<()> {
+// pub fn deposit_handler(ctx: Context<BankDeposit>, amount: u64) -> Result<()> {
 //     let bank = &mut ctx.accounts.bank;
-//     let bank_id_bytes = bank.bank_id.to_le_bytes();
-
 //     let cpi_ctx = CpiContext::new(
 //         ctx.accounts.token_program.to_account_info(),
 //         Transfer {
-//             from: ctx.accounts.treasury_ata.to_account_info(),
-//             to: ctx.accounts.reciepient_ata.to_account_info(),
-//             authority: ctx.accounts.banks_multisig_signer.to_account_info(),
+//             from: ctx.accounts.deposit_authority_ata.to_account_info(),
+//             to: ctx.accounts.treasury_ata.to_account_info(),
+//             authority: ctx.accounts.deposit_authority.to_account_info(),
 //         },
 //     );
 //     transfer(cpi_ctx, amount)?;
