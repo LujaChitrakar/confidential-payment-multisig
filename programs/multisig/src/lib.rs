@@ -19,6 +19,8 @@ use state::{
     tx_data::{InstructionAccount, InstructionData, VersionedInstructionData},
 };
 
+use crate::error::ErrorCode;
+
 declare_id!("3j1ncRqK33zZfcD41825zgEErb6xQJJhrfSH2v5L11wj");
 
 #[program]
@@ -102,50 +104,51 @@ pub mod multisig {
     ) -> Result<()> {
         change_multisig_realloc_handler(ctx, change_type)
     }
+
     //     //PAYMENT GATEWAY
 
-    //     pub fn initialize_gateway(
-    //         ctx: Context<InitializeGateway>,
-    //         admin: Pubkey,
-    //     ) -> Result<()> {
-    //         initialize_gateway_handler(ctx, admin )?;
-    //         Ok(())
-    //     }
+    pub fn initialize_gateway(ctx: Context<InitializeGateway>, admin: Pubkey) -> Result<()> {
+        initialize_gateway_handler(ctx, admin)?;
+        Ok(())
+    }
 
-    //     pub fn attest_kyc(
-    //         ctx: Context<AttestKyc>,
-    //         bank_id: u64
-    //     ) -> Result<()> {
-    //         attest_kyc_handler(ctx, bank_id)?;
-    //         Ok(())
-    //     }
+    pub fn attest_kyc(ctx: Context<AttestKyc>, bank_id: u64) -> Result<()> {
+        attest_kyc_handler(ctx, bank_id)?;
+        Ok(())
+    }
 
-    //     pub fn emergency_freeze(
-    //         ctx: Context<EmergencyFreeze>,
-    //         bank_id: u64,
-    //     ) -> Result<()> {
-    //         emergency_freeze_handler(ctx, bank_id)?;
-    //         Ok(())
-    //     }
+    pub fn register_bank(
+        ctx: Context<RegisterBank>,
+        bank_id: u64,
+        bank_name: String,
+        swift_code: String,
+    ) -> Result<()> {
+        register_bank_handler(ctx, bank_id, bank_name, swift_code)?;
+        Ok(())
+    }
 
-    //     pub fn register_bank(
-    //         ctx: Context<RegisterBank>,
-    //         bank_id: u64,
-    //         bank_name: String,
-    //         swift_code: String,
-    //     ) -> Result<()> {
-    //         register_bank_handler(ctx, bank_id,bank_name, swift_code)?;
-    //         Ok(())
-    //     }
+    pub fn bank_deposit(ctx: Context<BankDeposit>, bank_id: u64, amount: u64) -> Result<()> {
+        deposit_handler(ctx, amount)?;
+        Ok(())
+    }
 
-    // }
+    pub fn bank_withdraw(ctx: Context<BankWithdraw>, bank_id: u64, amount: u64) -> Result<()> {
+        withdraw_handler(ctx, amount)?;
+        Ok(())
+    }
 
-    // pub fn assert_unique_owners(owners: &[Pubkey]) -> Result<()> {
-    //     for (i, owner) in owners.iter().enumerate() {
-    //         require!(
-    //             !owners.iter().skip(i + 1).any(|item| item == owner),
-    //             ErrorCode::UniqueOwners
-    //         )
-    //     }
-    //     Ok(())
+    pub fn emergency_freeze(ctx: Context<EmergencyFreeze>, bank_id: u64) -> Result<()> {
+        emergency_freeze_handler(ctx, bank_id)?;
+        Ok(())
+    }
+}
+
+pub fn assert_unique_owners(owners: &[Pubkey]) -> Result<()> {
+    for (i, owner) in owners.iter().enumerate() {
+        require!(
+            !owners.iter().skip(i + 1).any(|item| item == owner),
+            ErrorCode::UniqueOwners
+        )
+    }
+    Ok(())
 }

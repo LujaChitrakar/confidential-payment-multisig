@@ -1,3 +1,4 @@
+pub mod gateway;
 pub mod multisig;
 pub mod transaction;
 pub mod tx_data;

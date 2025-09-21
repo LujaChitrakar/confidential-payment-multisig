@@ -21,7 +21,7 @@ pub struct ChangeMultisigRealloc<'info> {
         bump = multi_sig.multisig_bump
     )]
     pub multi_sig: Account<'info, MultiSig>,
-    
+
     ///CHECK authority
     #[account(
         seeds = [
