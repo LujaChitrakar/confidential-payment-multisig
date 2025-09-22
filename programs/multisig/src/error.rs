@@ -114,4 +114,8 @@ pub enum ErrorCode {
     InsufficientQuoteTokens,
     #[msg("InvalidSwap")]
     InvalidSwap,
+    #[msg("KycNotVerified")]
+    KycNotVerified,
+    #[msg("InvalidAdmin")]
+    InvalidAdmin,
 }

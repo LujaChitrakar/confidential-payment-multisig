@@ -1,5 +1,3 @@
-use anchor_lang::prelude::*;
-
 use crate::{
     error::ErrorCode,
     state::{
@@ -8,6 +6,7 @@ use crate::{
         tx_data::{InstructionAccount, TxData},
     },
 };
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 #[instruction(keys: Vec<InstructionAccount>)]

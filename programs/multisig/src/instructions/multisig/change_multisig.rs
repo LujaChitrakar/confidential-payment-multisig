@@ -1,9 +1,8 @@
-use anchor_lang::prelude::*;
-
 use crate::{
     error::ErrorCode,
     state::multisig::{ChangeType, MultiSig},
 };
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct ChangeMultisig<'info> {
@@ -49,6 +48,5 @@ pub fn change_multisig_handler(
     }
 
     multi_sig.version += 1;
-
     Ok(())
 }

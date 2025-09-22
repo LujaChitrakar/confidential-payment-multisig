@@ -23,7 +23,6 @@ pub struct CreateMultisig<'info> {
 
     #[account(mut)]
     pub signer: Signer<'info>,
-
     pub system_program: Program<'info, System>,
 }
 
@@ -81,6 +80,5 @@ pub fn create_multisig_handler(
         signer.key(),
         ctx.bumps.multi_sig,
     );
-
     Ok(())
 }

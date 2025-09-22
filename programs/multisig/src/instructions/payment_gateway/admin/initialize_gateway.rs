@@ -26,8 +26,6 @@ pub fn initialize_gateway_handler(
     let gateway = &mut ctx.accounts.gateway;
     gateway.admin = admin;
     gateway.total_banks = 0;
-    // gateway.treasury = treasury;
-    // gateway.fee_bps = fee_bps;
     gateway.is_active = true;
 
     Ok(())

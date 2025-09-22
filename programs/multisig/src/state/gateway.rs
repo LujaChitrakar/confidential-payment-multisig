@@ -3,11 +3,8 @@ use anchor_lang::prelude::*;
 #[derive(InitSpace)]
 pub struct PaymentGateway {
     pub admin: Pubkey,
-    pub treasury: Pubkey, //where fees go
-    pub fee_bps: u16,
     pub is_active: bool,
     pub total_banks: u32,
-    // pub token_mint:Pubkey,
 }
 
 #[account]
@@ -17,7 +14,6 @@ pub struct BankAccount {
     #[max_len(20)]
     pub bank_name: String,
     pub bank_admin: Pubkey,
-    pub bank_multisig: Pubkey,
     pub instant_withdrawl_limit: u64,
     #[max_len(10)]
     pub swift_code: String,

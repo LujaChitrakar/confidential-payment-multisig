@@ -6,7 +6,6 @@ use crate::{
     },
 };
 use anchor_lang::prelude::*;
-// use crate::{state::{MultiSig, Transaction, TransactionStatus},Errors};
 
 #[derive(Accounts)]
 #[instruction(owner_stratum: u8)]
@@ -60,6 +59,5 @@ pub fn accept_transaction_handler(
     }
 
     transaction.status = TransactionStatus::Accepted;
-
     Ok(())
 }

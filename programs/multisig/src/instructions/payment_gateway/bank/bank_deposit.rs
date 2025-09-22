@@ -1,14 +1,17 @@
+use crate::{constants::USDC_MINT, error::ErrorCode, state::gateway::BankAccount};
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{ transfer, Mint, Token, TokenAccount, Transfer},
+    token::{transfer, Mint, Token, TokenAccount, Transfer},
 };
-use crate::{error::ErrorCode, state::gateway::BankAccount};
 
 #[derive(Accounts)]
 #[instruction(bank_id:u64)]
 pub struct BankDeposit<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        address=bank.bank_admin @ErrorCode::InvalidAdmin
+    )]
     pub admin: Signer<'info>,
 
     #[account(
@@ -17,8 +20,8 @@ pub struct BankDeposit<'info> {
         bump
     )]
     pub bank: Account<'info, BankAccount>,
-    
-    // #[account()]
+
+    #[account(address=USDC_MINT)]
     pub usdc_mint: Account<'info, Mint>,
     #[account(
         mut,
@@ -39,10 +42,13 @@ pub struct BankDeposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn bank_deposit_handler(ctx: Context<BankDeposit>, bank_id:u64,amount: u64) -> Result<()> {
+pub fn bank_deposit_handler(ctx: Context<BankDeposit>, bank_id: u64, amount: u64) -> Result<()> {
     let bank = &mut ctx.accounts.bank;
 
     require!(bank.bank_id == bank_id, ErrorCode::InvalidBankId);
+    require!(amount > 0, ErrorCode::InvalidAmount);
+    require!(bank.is_active, ErrorCode::InactiveStratum);
+
     let cpi_ctx = CpiContext::new(
         ctx.accounts.token_program.to_account_info(),
         Transfer {

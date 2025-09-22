@@ -4,15 +4,18 @@ use anchor_spl::{
     token::{transfer, Mint, Token, TokenAccount, Transfer},
 };
 
-use crate::{error::ErrorCode, state::gateway::BankAccount};
+use crate::{constants::USDC_MINT, error::ErrorCode, state::gateway::BankAccount};
 
 #[derive(Accounts)]
 #[instruction(bank_id:u64,recipient:Pubkey)]
 pub struct BankWithdraw<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        address=bank.bank_admin @ErrorCode::InvalidAdmin
+    )]
     pub admin: Signer<'info>,
 
-    #[account()]
+    #[account(address=USDC_MINT)]
     pub usdc_mint: Account<'info, Mint>,
 
     #[account(
@@ -22,8 +25,6 @@ pub struct BankWithdraw<'info> {
     )]
     pub bank: Account<'info, BankAccount>,
 
-    // #[account(mut)]
-    // pub banks_multisig_signer: Account<'info, Multisig>,
     #[account(
          mut,
         associated_token::mint=usdc_mint,
@@ -43,11 +44,19 @@ pub struct BankWithdraw<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn bank_withdraw_handler(ctx: Context<BankWithdraw>,bank_id:u64,_recipient:Pubkey, amount: u64) -> Result<()> {
+pub fn bank_withdraw_handler(
+    ctx: Context<BankWithdraw>,
+    bank_id: u64,
+    _recipient: Pubkey,
+    amount: u64,
+) -> Result<()> {
     let bank = &mut ctx.accounts.bank;
     let bank_id_bytes = bank.bank_id.to_le_bytes();
 
     require!(bank.bank_id == bank_id, ErrorCode::InvalidBankId);
+    require!(amount > 0, ErrorCode::InvalidAmount);
+    require!(bank.is_active, ErrorCode::InactiveStratum);
+
     let signer_seeds: &[&[&[u8]]] = &[&[b"bank", &bank_id_bytes[..], &[ctx.bumps.bank]]];
 
     let cpi_ctx = CpiContext::new_with_signer(

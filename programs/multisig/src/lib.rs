@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
 use std::convert::Into;
+pub mod constants;
 pub mod error;
 pub mod instructions;
 pub mod state;
-pub mod constants;
 use instructions::{
     multisig::{
         accept_transaction::*, add_tx_data::*, change_multisig::*, change_multisig_realloc::*,
@@ -12,7 +12,7 @@ use instructions::{
     },
     payment_gateway::{
         admin::{attest_kyc::*, initialize_gateway::*, register_bank::*},
-        bank::{bank_deposit::*, bank_withdraw::*, emergency_freeze::*,swap::*},
+        bank::{bank_deposit::*, bank_withdraw::*, emergency_freeze::*, swap::*},
     },
 };
 use state::{
@@ -29,7 +29,7 @@ declare_program!(jupiter);
 pub mod multisig {
     use super::*;
 
-    // MULTISIGpub
+    // MULTISIG
     pub fn create_multisig(
         ctx: Context<CreateMultisig>,
         strata: Vec<Stratum>,
@@ -130,12 +130,17 @@ pub mod multisig {
     }
 
     pub fn bank_deposit(ctx: Context<BankDeposit>, bank_id: u64, amount: u64) -> Result<()> {
-        bank_deposit_handler(ctx, bank_id,amount)?;
+        bank_deposit_handler(ctx, bank_id, amount)?;
         Ok(())
     }
 
-    pub fn bank_withdraw(ctx: Context<BankWithdraw>, bank_id: u64, recipient:Pubkey, amount: u64) -> Result<()> {
-        bank_withdraw_handler(ctx,bank_id,recipient, amount)?;
+    pub fn bank_withdraw(
+        ctx: Context<BankWithdraw>,
+        bank_id: u64,
+        recipient: Pubkey,
+        amount: u64,
+    ) -> Result<()> {
+        bank_withdraw_handler(ctx, bank_id, recipient, amount)?;
         Ok(())
     }
 
@@ -144,8 +149,8 @@ pub mod multisig {
         Ok(())
     }
 
-    pub fn swap(ctx: Context<Swap>, bank_id: u64,data: Vec<u8>) -> Result<()> {
-        swap_handler(ctx, bank_id,data)?;
+    pub fn swap(ctx: Context<Swap>, bank_id: u64, data: Vec<u8>) -> Result<()> {
+        swap_handler(ctx, bank_id, data)?;
         Ok(())
     }
 }

@@ -1,9 +1,12 @@
 use crate::{
-    constants::{WSOL_MINT, USDC_MINT},
+    constants::{USDC_MINT, WSOL_MINT},
     error::ErrorCode,
-    jupiter::{program::Jupiter, types::RoutePlanStep}, state::gateway::BankAccount,
+    jupiter::{program::Jupiter, types::RoutePlanStep},
+    state::gateway::BankAccount,
 };
-use anchor_lang::{ prelude::*, solana_program::{entrypoint::ProgramResult, instruction::Instruction, program::invoke_signed}
+use anchor_lang::{
+    prelude::*,
+    solana_program::{entrypoint::ProgramResult, instruction::Instruction, program::invoke_signed},
 };
 use anchor_spl::{
     associated_token::AssociatedToken,
@@ -19,14 +22,13 @@ pub struct SwapArgs {
     slippage_bps: u16,
     platform_fee_bps: u8,
 }
-// contribution=usdc \\ lp_mint=WSOL
 #[derive(Accounts)]
 #[instruction(bank_id:u64)]
 pub struct Swap<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
 
-   #[account(
+    #[account(
         mut,
         seeds = [b"bank", &bank_id.to_le_bytes().as_ref()],
         bump
@@ -57,14 +59,18 @@ pub struct Swap<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn swap_handler(ctx: Context<Swap>, bank_id:u64,data: Vec<u8>) -> Result<()> {
+pub fn swap_handler(ctx: Context<Swap>, bank_id: u64, data: Vec<u8>) -> Result<()> {
     let bank = &mut ctx.accounts.bank;
+
+    require!(bank.bank_id == bank_id, ErrorCode::InvalidBankId);
+    require!(bank.is_active, ErrorCode::InactiveStratum);
+
     let pre_usdc_balance = ctx.accounts.authority_usdc_ata.amount;
     let pre_sol_balance = ctx.accounts.authority_sol_ata.amount;
 
     require!(bank.bank_id == bank_id, ErrorCode::InvalidBankId);
 
-     let bank_id_bytes = bank.bank_id.to_le_bytes();
+    let bank_id_bytes = bank.bank_id.to_le_bytes();
     let signer_seeds: &[&[&[u8]]] = &[&[b"bank", &bank_id_bytes[..], &[ctx.bumps.bank]]];
 
     swap_on_jupiter(
@@ -84,16 +90,14 @@ pub fn swap_handler(ctx: Context<Swap>, bank_id:u64,data: Vec<u8>) -> Result<()>
     let swap_to_usdc_args = SwapArgs::try_from_slice(&data[8..])?;
     let slippage_bps = swap_to_usdc_args.slippage_bps;
     let min_out_amount = ((swap_to_usdc_args.qouted_out_amount as u128)
-        *(10000 - slippage_bps as u128)/10000) as u64;
+        * (10000 - slippage_bps as u128)
+        / 10000) as u64;
 
     //SWAP from LP -> USDC
-    require!(
-        post_usdc_balance > pre_usdc_balance,
-        ErrorCode::InvalidSwap
-    );
+    require!(post_usdc_balance > pre_usdc_balance, ErrorCode::InvalidSwap);
 
-    let usdc_received = post_usdc_balance-pre_usdc_balance;
-    let lp_tokens_sold = pre_sol_balance-post_sol_balance;
+    let usdc_received = post_usdc_balance - pre_usdc_balance;
+    let lp_tokens_sold = pre_sol_balance - post_sol_balance;
 
     require!(
         usdc_received >= min_out_amount,
