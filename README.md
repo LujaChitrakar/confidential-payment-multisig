@@ -1,4 +1,4 @@
-# Confidential Payment Gateway( with Strata model multisig & KYC Transfers & Swap with JUP )
+# Confidential Payment Gateway( with multisig & KYC Transfers & Swap with JUP )
 
 This project, **confidential payment gateway for banks** is built on Solana using Anchor. While Solana's `confidential transfer` is still under audit, this framework uses a **permissioned, multisig-controlled architecture** for inter-bank settlements, ensuring privacy, compliance, and auditability.
 
